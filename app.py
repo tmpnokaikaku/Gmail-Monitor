@@ -7,7 +7,7 @@ from extract_gmail_content import ExtractGmailContent
 
 
 def main():
-    gmm_app = GmailMonitor(flask_port=8080)
+    gmm_app = GmailMonitor(flask_port=8080, number_to_fetch=10)
 
     gmm_app.run_and_expose_server()
     print(f"ngrok public url: {gmm_app.public_url}")

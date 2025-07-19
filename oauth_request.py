@@ -113,4 +113,4 @@ class OAuthRequest(GMMServer):
         encoded_uid = quote(uid)
         url = f"https://{self.webhook_domain}/oauth/start?uid={encoded_uid}"
         msg = f"Gmail連携のため、以下のリンクからGoogle認証を完了してください。\n{url}"
-        self.push_func(uid, msg)
+        self.push_func(msg)
