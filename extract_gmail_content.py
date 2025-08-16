@@ -1,37 +1,70 @@
+from __future__ import annotations
 import re
 import json
+from typing import Dict, List, Tuple, Optional
 
 
-class ExtractGmailContent():
-    def __init__(self, filter_path:str ="filters.json",):
-        self.fields = {}
+class ExtractGmailContent:
+    """メール本文の抽出とフィルタ定義の読み込み。
 
+    filters.json（新仕様）
+    {
+        "groups": {
+            "manaba": {
+            "subjects": ["manaba", "【manaba】", "manabaからの通知"],
+            "senders": ["@manaba", "no-reply@manaba.jp"],
+            "extractor": "manaba"
+            },
+            "CELS": {
+            "subjects": ["CELS"],
+            "senders": ["cels@"],
+            "extractor": "cels"
+            }
+        }
+    }
+    """
+
+    def __init__(self, filter_path: str = "filters.json") -> None:
+        self.fields: Dict[str, str] = {}
         with open(filter_path, "r", encoding="utf-8") as f:
             data = json.load(f)
-        self.filter = (data.get("subjects", []), data.get("senders", []))
-
-    
-    def clear_result(self):
-        # 空の辞書で上書き
-        self.fields = {}
+        if "groups" not in data or not isinstance(data["groups"], dict):
+            raise ValueError("filters.json がgroups配下ではありません")
+        self.groups: Dict[str, Dict[str, List[str]]] = data["groups"]
 
 
-    def filter_by_items(self, mail_content:dict):
-        subject_keywords, sender_keywords = self.filter
-
-        subject = mail_content["subject"]
-        sender = mail_content["sender"]
-
-        if (
-            any(keyword in subject for keyword in subject_keywords) or
-            any(keyword in sender for keyword in sender_keywords)
-        ):
-            return True, "manaba"   # カッコ仮
-        else:
-            return False, "manaba"
+    def _match_any(self, haystack: str, needles: List[str]) -> bool:
+        s = haystack or ""
+        s_lower = s.lower()
+        for n in needles:
+            if not n:
+                continue
+            if n.lower() in s_lower:
+                return True
+        return False
 
 
-    def extract(self, keyword:str, body_text):
+    def filter_by_items(self, mail_content: Dict[str, str]) -> Tuple[bool, Optional[str], Optional[str]]:
+        """件名・送信者に基づいてグループを決定\n
+        戻り値: (is_match, extractor, sender_label)
+        - extractor: 抽出器ID（例: "manaba", "cels"）
+        - sender_label: グループ名（例: "manaba", "CELS"）
+        """
+        subject = mail_content.get("subject", "")
+        sender = mail_content.get("sender", "")
+
+        for group_name, cfg in self.groups.items():
+            subjects = cfg.get("subjects", [])
+            senders = cfg.get("senders", [])
+            extractor = cfg.get("extractor", group_name)
+
+            if self._match_any(subject, subjects) or self._match_any(sender, senders):
+                return True, extractor, group_name
+
+        return False, None, None
+
+
+    def extract(self, keyword: str, body_text: str) -> Optional[Dict[str, str]]:
         if keyword == "manaba":
             return self.from_manaba(body_text)
         elif keyword == "cels":
@@ -40,8 +73,12 @@ class ExtractGmailContent():
             return None
 
 
-    def from_manaba(self, body_text):
-        self.clear_result()
+    def _clear_field(self) -> None:
+            self.fields = {}
+
+
+    def from_manaba(self, body_text: str) -> Dict[str, str]:
+        self._clear_field()
 
         # 掲示された内容
         match_notice = re.search(r'に、\[(.+?)\]が.+?されました', body_text)
@@ -80,13 +117,12 @@ class ExtractGmailContent():
 
         return self.fields
 
-
-    def from_cels(self, body_text):
-        def extract_japanese(text):
+    def from_cels(self, body_text: str) -> Dict[str, str]:
+        def extract_japanese(text: str) -> str:
             """スラッシュがあれば左側（日本語）、無ければそのまま"""
             return text.split('/')[0].strip()
-        
-        self.clear_result()
+
+        self._clear_field()
 
         # ジャンル名称
         match_genre = re.search(r'ジャンル名称：(.+)', body_text)
