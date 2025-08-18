@@ -38,6 +38,12 @@ class OAuthRequest(GMMServer):
         認証を実施。token.jsonがあればそれを使用し、リフレッシュを試みる。
         失敗したらLINEに認証リンクを送る。
         """
+        def send_auth_link(uid):
+            encoded_uid = quote(uid)
+            url = f"https://{self.webhook_domain}/oauth/start?uid={encoded_uid}"
+            msg = f"Gmail連携のため、以下のリンクからGoogle認証を完了してください。\n{url}"
+            self.push_func(msg)
+
         if os.path.exists(self.token_path):
             self.google_creds = Credentials.from_authorized_user_file(self.token_path, self.__class__.scopes)
             if self.google_creds and self.google_creds.valid:
@@ -53,7 +59,7 @@ class OAuthRequest(GMMServer):
 
         # 認証失敗した場合、認証リンクをLINEに送信
         if self.push_func and uid:
-            self.send_auth_link(uid)
+            send_auth_link(uid)
 
         return False
 
@@ -107,10 +113,3 @@ class OAuthRequest(GMMServer):
         if self.push_func:
             self.push_func(state, "Google認証完了。Gmailの自動通知を有効化しました。")
         return "Google認証が完了しました。LINEにも通知を送りました。"
-
-
-    def send_auth_link(self, uid):
-        encoded_uid = quote(uid)
-        url = f"https://{self.webhook_domain}/oauth/start?uid={encoded_uid}"
-        msg = f"Gmail連携のため、以下のリンクからGoogle認証を完了してください。\n{url}"
-        self.push_func(msg)

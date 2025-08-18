@@ -1,5 +1,5 @@
 
-from flask import Flask, request, abort
+from flask import request, abort
 
 from linebot.v3.messaging import(
     MessagingApi,
@@ -18,8 +18,7 @@ from linebot.v3.webhooks import(
 )
 
 from dotenv import load_dotenv
-from pyngrok import ngrok
-import threading
+
 import os
 import requests
 
@@ -80,10 +79,10 @@ class LINEWebhook(GMMServer):
         self.app.add_url_rule("/callback", view_func=self.callback, methods=["POST"])
 
         # LINEイベントハンドラのデコレータを作成
-        # 友達追加された
+        ## 友達追加された
         decorator_follow = self.handler.add(FollowEvent)
         decorator_follow(self.handle_follow)
-        # テキストメッセージを受信
+        ## テキストメッセージを受信
         decorator_message = self.handler.add(MessageEvent, message=TextMessageContent)
         decorator_message(self.handle_message)
 
