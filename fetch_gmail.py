@@ -1,8 +1,3 @@
-from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import Flow
-from google.auth.transport.requests import Request
-from googleapiclient.discovery import build
-
 import base64
 
 from gmm_server import GMMServer
