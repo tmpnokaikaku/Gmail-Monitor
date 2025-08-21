@@ -19,7 +19,7 @@ class AppConfig:
     token_and_secret_from_env: bool = True
     domain_from_env: bool = True
     uid_from_env: bool = True
-    env_key_for_domain: str = "NGROK_STATIC_DOMAIN"
+    env_key_for_domain: str = "SERVER_DOMAIN"
     line_access_token: str = ""
     line_channel_secret: str = ""
     webhook_domain: str = ""
@@ -114,7 +114,7 @@ def main() -> None:
         text_lines = [f"[{sender_label}]" ] + [f"{k}: {v}" for k, v in info.items()]
         gmm_app.push_to_line("\n".join(text_lines))
 
-    gmm_app.close_ngrok_tunnel()
+    gmm_app.stop_server()
 
 
 if __name__ == "__main__":

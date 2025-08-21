@@ -1,7 +1,7 @@
-from flask import Flask, request, redirect
-from pyngrok import ngrok
+from flask import Flask
 
 import threading
+import sys
 import os
 
 class GMMServer():
@@ -10,7 +10,7 @@ class GMMServer():
         self.port = flask_port
         self.webhook_domain = os.getenv(env_key_for_domain)
         self.public_url = None
-        self.server_open = False
+        self.server_running = False
 
     # flaskサーバーを外部に公開
     def run_and_expose_server(self):
@@ -22,17 +22,14 @@ class GMMServer():
         # flask開始
         self.flask_thread = threading.Thread(target=run_flask, daemon=True)
         self.flask_thread.start()
-        # ngrokトンネル開始
-        self.public_url = ngrok.connect(self.port, bind_tls=True, domain=self.webhook_domain)
 
         # フラグ
-        self.server_open = True
+        self.server_running = True
 
     # サーバー終了
-    def close_ngrok_tunnel(self):
+    def stop_server(self):
         if self.public_url:
-            ngrok.disconnect(self.public_url)
-            ngrok.kill()
-            self.server_open = False
+            sys.exit()
+            self.server_running = False
         else:
             pass
