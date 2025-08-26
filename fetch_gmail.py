@@ -9,7 +9,7 @@ class FetchGmail(GMMServer):
             number_to_fetch:int = 5,
 
             flask_port:int = 8080,
-            env_key_for_domain:str ="NGROK_STATIC_DOMAIN"
+            env_key_for_domain:str ="SERVER_DOMAIN"
     ):
         GMMServer.__init__(self, flask_port=flask_port, env_key_for_domain=env_key_for_domain)
 

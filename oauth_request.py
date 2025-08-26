@@ -18,7 +18,7 @@ class OAuthRequest(GMMServer):
             token_path:str= "token.json",
             flask_port:int= 8080,
             push_func = None,
-            env_key_for_domain:str ="NGROK_STATIC_DOMAIN"
+            env_key_for_domain:str ="SERVER_DOMAIN"
         ):
         
         GMMServer.__init__(self, flask_port=flask_port, env_key_for_domain=env_key_for_domain)
@@ -37,11 +37,6 @@ class OAuthRequest(GMMServer):
         認証を実施。token.jsonがあればそれを使用し、リフレッシュを試みる。
         失敗したらLINEに認証リンクを送る。
         """
-        def send_auth_link(uid):
-            encoded_uid = quote(uid)
-            url = f"https://{self.webhook_domain}/oauth/start?uid={encoded_uid}"
-            msg = f"Gmail連携のため、以下のリンクからGoogle認証を完了してください。\n{url}"
-            self.push_func(msg)
 
         if os.path.exists(self.token_path):
             self.google_creds = Credentials.from_authorized_user_file(self.token_path, self.__class__.scopes)
@@ -58,7 +53,10 @@ class OAuthRequest(GMMServer):
 
         # 認証失敗した場合、認証リンクをLINEに送信
         if self.push_func and uid:
-            send_auth_link(uid)
+            encoded_uid = quote(uid)
+            url = f"https://{self.webhook_domain}/oauth/start?uid={encoded_uid}"
+            msg = f"Gmail連携のため、以下のリンクからGoogle認証を完了してください。\n{url}"
+            self.push_func(msg)
 
         return False
 
@@ -110,5 +108,5 @@ class OAuthRequest(GMMServer):
             token.write(creds.to_json())
 
         if self.push_func:
-            self.push_func(state, "Google認証完了。Gmailの自動通知を有効化しました。")
+            self.push_func("Google認証完了。Gmailの自動通知を有効化しました。")
         return "Google認証が完了しました。LINEにも通知を送りました。"

@@ -5,7 +5,7 @@ import sys
 import os
 
 class GMMServer():
-    def __init__(self, flask_port:int=8080, env_key_for_domain:str="NGROK_STATIC_DOMAIN"):
+    def __init__(self, flask_port:int=8080, env_key_for_domain:str="SERVER_DOMAIN"):
         self.app = Flask(__name__)
         self.port = flask_port
         self.webhook_domain = os.getenv(env_key_for_domain)

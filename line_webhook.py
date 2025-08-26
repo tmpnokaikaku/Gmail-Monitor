@@ -35,7 +35,7 @@ class LINEWebhook(GMMServer):
             domain_from_env:bool = True,
             uid_from_env:bool = True,
 
-            env_key_for_domain:str ="NGROK_STATIC_DOMAIN",
+            env_key_for_domain:str ="SERVER_DOMAIN",
 
             line_access_token:str ="",
             line_channel_secret:str ="",
@@ -55,7 +55,7 @@ class LINEWebhook(GMMServer):
 
         if domain_from_env:
             load_dotenv()
-            self.webhook_domain = os.getenv("NGROK_STATIC_DOMAIN")
+            self.webhook_domain = os.getenv("SERVER_DOMAIN")
         else:
             self.webhook_domain = webhook_domain
 

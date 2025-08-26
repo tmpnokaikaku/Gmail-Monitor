@@ -91,11 +91,20 @@ def main() -> None:
     try:
         service = gmm_app.get_gmail_service()
     except Exception:
-        is_authorized = gmm_app.authorize(gmm_app.line_uid)
-        while not is_authorized:
-            time.sleep(10)
-            print("認証待機中")
-        service = gmm_app.get_gmail_service()
+        # 認証リンクをLINEに送る（tokenが無い/失効時）
+        _ = gmm_app.authorize(gmm_app.line_uid)
+
+        # token.jsonができて有効になるまで最大10分ポーリング
+        service = None
+        for _ in range(60):
+            try:
+                service = gmm_app.get_gmail_service()
+                break
+            except Exception:
+                time.sleep(10)
+                print("認証待機中…")
+        if service is None:
+            raise RuntimeError("OAuthが完了しませんでした。")
 
     mail_contents = gmm_app.fetch_mail_content(service)
     print(f"{len(mail_contents)}件のメールを受信")
