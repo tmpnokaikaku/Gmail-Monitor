@@ -33,7 +33,7 @@ class GMMServer():
             sh.setFormatter(fmt)
             self.logger.addHandler(sh)
 
-            # ファイル出力（任意）
+            # ファイル出力
             log_file = os.getenv("GMM_LOG_FILE")
             if log_file:
                 fh = RotatingFileHandler(log_file, maxBytes=1_000_000, backupCount=3)
