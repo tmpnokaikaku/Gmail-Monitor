@@ -17,6 +17,7 @@ class GMMServer():
 
         # 共通ロガー初期化
         self._init_logger()
+        self.app.logger.info(f"ロガーは{self.log_cfg[0]}階層,ファイル出力モードは{self.log_cfg[1]}に設定されています")
 
 
     def _init_logger(self):
@@ -43,6 +44,8 @@ class GMMServer():
                 fh = RotatingFileHandler(log_file, mode=mode, maxBytes=1_000_000, backupCount=3)
                 fh.setFormatter(fmt)
                 self.logger.addHandler(fh)
+
+        self.log_cfg = (level, log_file)
 
         # Flask / Werkzeug ロガーにも同ハンドラを付与
         for name in ("flask.app", "werkzeug"):
