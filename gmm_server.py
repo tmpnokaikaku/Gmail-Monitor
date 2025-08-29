@@ -24,11 +24,9 @@ class GMMServer():
         if not self.logger.handlers:
             level = os.getenv("GMM_LOG_LEVEL", "INFO").upper()
             self.logger.setLevel(level)
+            fmt = logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
 
-            fmt = logging.Formatter(
-                "%(asctime)s %(levelname)s %(name)s %(message)s"
-            )
-            # 標準出力
+            # コンソール出力
             sh = logging.StreamHandler()
             sh.setFormatter(fmt)
             self.logger.addHandler(sh)
@@ -36,14 +34,32 @@ class GMMServer():
             # ファイル出力
             log_file = os.getenv("GMM_LOG_FILE")
             if log_file:
-                fh = RotatingFileHandler(log_file, maxBytes=1_000_000, backupCount=3)
+                try:
+                    os.makedirs(os.path.dirname(log_file), exist_ok=True)
+                except Exception:
+                    pass
+                from logging.handlers import RotatingFileHandler
+                mode = "w" if os.getenv("GMM_LOG_MODE", "append").lower() in ("overwrite", "w", "truncate") else "a"
+                fh = RotatingFileHandler(log_file, mode=mode, maxBytes=1_000_000, backupCount=3)
                 fh.setFormatter(fmt)
                 self.logger.addHandler(fh)
 
-        # Flaskのロガーに統合
+        # Flask / Werkzeug ロガーにも同ハンドラを付与
+        for name in ("flask.app", "werkzeug"):
+            flog = logging.getLogger(name)
+            flog.handlers = []
+            flog.setLevel(self.logger.level)
+            flog.propagate = False
+            for h in self.logger.handlers:
+                flog.addHandler(h)
+
+        # app.logger も同一化
         self.app.logger.handlers = []
         self.app.logger.setLevel(self.logger.level)
-        self.app.logger.propagate = True
+        self.app.logger.propagate = False
+        for h in self.logger.handlers:
+            self.app.logger.addHandler(h)
+
 
 
     # flaskサーバーを外部に公開
@@ -51,7 +67,8 @@ class GMMServer():
     def run_and_expose_server(self):
         # ヘルスチェック
         if not hasattr(self, "_health_added"):
-            self.app.add_url_rule("/health", "health", lambda: "ok", methods=["GET"])
+            self.app.add_url_rule("/health", "health", lambda: ("ok", 200), methods=["GET", "HEAD"])
+            self.app.add_url_rule("/", "root", lambda: ("ok", 200), methods=["GET", "HEAD"])
             self._health_added = True
 
         def run_flask():
