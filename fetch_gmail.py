@@ -11,7 +11,10 @@ class FetchGmail(GMMServer):
             flask_port:int = 8080,
             env_key_for_domain:str ="SERVER_DOMAIN"
     ):
-        GMMServer.__init__(self, flask_port=flask_port, env_key_for_domain=env_key_for_domain)
+
+        # GMMServer初期化は一度だけ
+        if not hasattr(self, "app"):
+            GMMServer.__init__(self, flask_port=flask_port, env_key_for_domain=env_key_for_domain)
 
         self.number_to_fetch = number_to_fetch
 
@@ -41,5 +44,6 @@ class FetchGmail(GMMServer):
             sender = next((h["value"] for h in headers if h["name"] == "From"), "(送信者不明)")
             full_body = self.get_full_text(msg["payload"])
             results.append({"headers":headers, "subject":subject, "sender":sender, "full_body":full_body})
-        
+
+        self.app.logger.info(f"{len(results)}件のメールを取得しました")
         return results

@@ -86,28 +86,29 @@ def main() -> None:
     gmm_app = GmailMonitor(cfg)
 
     gmm_app.run_and_expose_server()
-    print(f"ngrok public url: {gmm_app.public_url}")
+    gmm_app.app.logger.info(f"Public URL: {gmm_app.public_url}")
 
     try:
         service = gmm_app.get_gmail_service()
     except Exception:
         # 認証リンクをLINEに送る（tokenが無い/失効時）
-        _ = gmm_app.authorize(gmm_app.line_uid)
+        foo = gmm_app.authorize(gmm_app.line_uid)
 
         # token.jsonができて有効になるまで最大10分ポーリング
         service = None
-        for _ in range(60):
+        for i in range(60):
             try:
                 service = gmm_app.get_gmail_service()
+                gmm_app.app.logger.info("Gmail service 取得完了")
                 break
             except Exception:
                 time.sleep(10)
-                print("認証待機中…")
+                gmm_app.app.logger.info(f"認証待機中... ({i+1}/60)")
         if service is None:
-            raise RuntimeError("OAuthが完了しませんでした。")
+            gmm_app.app.logger.error("OAuthが完了しませんでした")
+            raise RuntimeError("OAuthが完了しませんでした")
 
     mail_contents = gmm_app.fetch_mail_content(service)
-    print(f"{len(mail_contents)}件のメールを受信")
 
     for content in mail_contents:
         # 返り値に extractor(抽出器) と sender_label(送信者ラベル) を含める

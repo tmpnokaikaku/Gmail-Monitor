@@ -23,6 +23,7 @@ import requests
 
 from gmm_server import GMMServer
 
+
 class LINEWebhook(GMMServer):
     def __init__(
             self,
@@ -42,7 +43,9 @@ class LINEWebhook(GMMServer):
             webhook_domain:str ="",
             line_uid:str =""
     ):
-        GMMServer.__init__(self, flask_port=flask_port, env_key_for_domain=env_key_for_domain)
+        # GMMServer初期化は一度だけ
+        if not hasattr(self, "app"):
+            GMMServer.__init__(self, flask_port=flask_port, env_key_for_domain=env_key_for_domain)
 
         # 設定読み込み
         if token_and_secret_from_env:
@@ -87,17 +90,18 @@ class LINEWebhook(GMMServer):
 
 
     def check_quota(self) -> int|None:
-        headers = {
-        "Authorization": f"Bearer {self.line_access_token}"
-        }
+        headers = {"Authorization": f"Bearer {self.line_access_token}"}
         url = "https://api.line.me/v2/bot/message/quota/consumption"
-        response = requests.get(url, headers=headers)
-        
-        if response.status_code == 200:
-            data = response.json()
-            return data.get("totalUsage", 0)  # 今月の送信通数
-        else:
-            print(f"Quota取得失敗: {response.status_code}")
+        try:
+            response = requests.get(url, headers=headers)
+            if response.status_code == 200:
+                data = response.json()
+                return data.get("totalUsage", 0)  # 今月の送信通数
+            else:
+                self.app.logger.warning(f"Quota取得失敗: {response.status_code}\n{response.text}")
+                return None
+        except Exception as e:
+            self.app.logger.exception(f"Quota取得例外:\n{e}")
             return None
         
 
@@ -112,7 +116,11 @@ class LINEWebhook(GMMServer):
         try:
             self.handler.handle(body, signature)
         except InvalidSignatureError:
+            self.app.logger.warning("Invalid signature")
             abort(400)
+        except Exception as e:
+            self.app.logger.exception(f"Webhook handling error: {e}")
+            abort(500)
 
         return "OK"
 
@@ -120,32 +128,31 @@ class LINEWebhook(GMMServer):
     # イベントハンドラ 友達追加された
     def handle_follow(self, event):
         if event.source.user_id != self.line_uid:
-            print(f"不正ユーザー {event.source.user_id} からのアクセスを拒否")
+            self.app.logger.warning(f"不正ユーザー {event.source.user_id} からのアクセスを拒否")
             return
         else:
             # APIインスタンス化
             with ApiClient(self.configuration) as api_client:
                 line_bot_api = MessagingApi(api_client)
-
-            # 返信
-            line_bot_api.reply_message(ReplyMessageRequest(
-                replyToken=event.reply_token,
-                messages=[TextMessage(text="このアカウントは非公開運用です")]
-            ))
+                line_bot_api.reply_message(
+                    ReplyMessageRequest(
+                        replyToken=event.reply_token,
+                        messages=[TextMessage(text="このアカウントは非公開運用です")]
+                    )
+                )
 
 
     # イベントハンドラ メッセージを受信
     def handle_message(self, event):
         # ユーザー認証
         if event.source.user_id != self.line_uid:
-            print(f"不正ユーザー {event.source.user_id} からのアクセスを拒否")
+            self.app.logger.warning(f"不正ユーザー {event.source.user_id} からのアクセスを拒否")
             return  # 無視して終了
         else:
             # APIインスタンス化
             with ApiClient(self.configuration) as api_client:
-                messaging_api = MessagingApi(api_client)
-                # v3スタイルのリクエストオブジェクト
-                messaging_api.reply_message(
+                line_bot_api = MessagingApi(api_client)
+                line_bot_api.reply_message(
                     ReplyMessageRequest(
                         reply_token=event.reply_token,
                         # オウム返し
@@ -158,16 +165,20 @@ class LINEWebhook(GMMServer):
     def push_to_line(self, message_text: str):
         quota_consumption = self.check_quota()
         if quota_consumption is None:
-            print("使用量の確認に失敗 送信を停止")
+            self.app.logger.warning("使用量の確認に失敗 送信を停止")
             return
         if quota_consumption >= self.max_quota - self.quota_buff:
-            print("メッセージの上限超過を確認 送信を停止")
+            self.app.logger.warning("メッセージの上限超過を確認 送信を停止")
             return
-        with ApiClient(self.configuration) as api_client:
-            messaging_api = MessagingApi(api_client)
-            messaging_api.push_message(
-                PushMessageRequest(
-                    to=self.line_uid,
-                    messages=[TextMessage(text=message_text)]
+        try:
+            with ApiClient(self.configuration) as api_client:
+                line_bot_api = MessagingApi(api_client)
+                line_bot_api.push_message(
+                    PushMessageRequest(
+                        to=self.line_uid,
+                        messages=[TextMessage(text=message_text)]
+                    )
                 )
-            )
+                self.app.logger.info(f"LINE push 送信: (len={len(message_text)})")
+        except Exception as e:
+            self.app.logger.exception(f"LINE pish 失敗: {e}")
