@@ -1,10 +1,11 @@
-import os
 from flask import request, redirect, abort
 from google.auth.transport.requests import Request
+from requests.exceptions import Timeout, RequestException
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from urllib.parse import quote
+import os
 
 from gmm_server import GMMServer
 
@@ -26,6 +27,7 @@ class OAuthRequest(GMMServer):
         self.google_creds = None
         self.push_func = push_func      # LINEへのプッシュ関数を外部から渡す
         self._expected_state = None     # LINE UIDをstateとして期待
+        self.http_timeout = int(os.getenv("GMM_HTTP_TIMEOUT", "60"))
 
         # GMMServer初期化は一度だけ
         if not hasattr(self, "app"):
@@ -130,7 +132,7 @@ class OAuthRequest(GMMServer):
                 self.creds_path, scopes=self.scopes,
                 redirect_uri=f"https://{self.webhook_domain}/oauth/callback"
             )
-            flow.fetch_token(authorization_response=request.url)
+            flow.fetch_token(authorization_response=request.url, timeout=self.http_timeout)
             creds = flow.credentials
             self.google_creds = creds
 
@@ -143,6 +145,12 @@ class OAuthRequest(GMMServer):
                 self.push_func("Google認証完了。Gmailの自動通知を有効化しました。")
             self.app.logger.info("OAuth callback completed and token.json saved")
             return "Google認証が完了しました。LINEにも通知を送りました。"
+        except Timeout as e:
+            self.app.logger.error(f"Google token API timeout (> {self.http_timeout}s): {e}")
+            return f"Google token API timeout (> {self.http_timeout}s)", 504
+        except RequestException as e:
+            self.app.logger.exception(f"Google token API request error: {e}")
+            return "Google token API request error", 502
         except Exception as e:
             self.app.logger.exception(f"/oauth/callback error: {e}")
             return "OAuthコールバック処理に失敗しました。ログを確認してください。", 500
