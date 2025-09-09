@@ -1,15 +1,24 @@
 from flask import Flask
+from werkzeug.middleware.proxy_fix import ProxyFix
+from logging.handlers import RotatingFileHandler
 import threading
 import sys
 import os
 import logging
-from logging.handlers import RotatingFileHandler
 
 
 class GMMServer():
     def __init__(self, flask_port: int = 8080, env_key_for_domain: str = "SERVER_DOMAIN"):
         # Flask app
         self.app = Flask(__name__)
+        """
+        リバースプロキシ越しの元情報を解釈する
+        NginxからFlaskに中継するとき、http接続と認識されるのを防ぐ
+            x_for=1: X-Forwarded-For
+            x_proto=1: X-Forwarded-Proto (https 判定に必須)
+            x_host=1, x_port=1, x_prefix=1 は念のため
+        """
+        self.app.wsgi_app = ProxyFix(self.app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_prefix=1)
         self.port = flask_port
         self.webhook_domain = os.getenv(env_key_for_domain)
         self.public_url = None
@@ -17,7 +26,6 @@ class GMMServer():
 
         # 共通ロガー初期化
         self._init_logger()
-        self.app.logger.info(f"ロガーは{self.log_cfg[0]}階層,ファイル出力モードは{self.log_cfg[1]}に設定されています")
 
 
     def _init_logger(self):
@@ -39,13 +47,26 @@ class GMMServer():
                     os.makedirs(os.path.dirname(log_file), exist_ok=True)
                 except Exception:
                     pass
+
+                # 明示的にゼロクリア
+                log_mode_env = os.getenv("GMM_LOG_MODE", "append").lower()
+                if log_mode_env in ("overwrite", "w", "truncate", "reset"):
+                    try:
+                        fd = os.open(log_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o640)
+                        os.close(fd)
+                    except Exception as e:
+                        # ゼロクリア失敗時も続行（次で open して書ける可能性はある）
+                        pass
+
+                # ハンドラ自体は常に append で作成（ダブル truncate を避ける）
                 from logging.handlers import RotatingFileHandler
-                mode = "w" if os.getenv("GMM_LOG_MODE", "append").lower() in ("overwrite", "w", "truncate") else "a"
-                fh = RotatingFileHandler(log_file, mode=mode, maxBytes=1_000_000, backupCount=3)
+                fh = RotatingFileHandler(log_file, mode="a", maxBytes=1_000_000, backupCount=3, delay=False)
                 fh.setFormatter(fmt)
                 self.logger.addHandler(fh)
 
-        self.log_cfg = (level, log_file)
+                # 起動時に有効設定を見える化
+                self.logger.info(f"Log config: file={log_file}, init={'truncate' if log_mode_env in ('overwrite','w','truncate','reset') else 'append'}, "
+                                f"rotate=maxBytes=1MB backupCount=3")
 
         # Flask / Werkzeug ロガーにも同ハンドラを付与
         for name in ("flask.app", "werkzeug"):
@@ -64,8 +85,6 @@ class GMMServer():
             self.app.logger.addHandler(h)
 
 
-
-    # flaskサーバーを外部に公開
     # flaskサーバーを外部に公開
     def run_and_expose_server(self):
         # ヘルスチェック

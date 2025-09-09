@@ -115,6 +115,7 @@ class OAuthRequest(GMMServer):
 
 
     def oauth_callback(self):
+        self.app.logger.info(f"/oauth/callback に到達: url={request.url[:200]}")    # コールバック到達ログ
         state = request.args.get("state")
         if not state:
             return "stateがありません", 400
