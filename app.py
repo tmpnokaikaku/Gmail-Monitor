@@ -101,7 +101,8 @@ def main() -> None:
                 service = gmm_app.get_gmail_service()
                 gmm_app.app.logger.info("Gmail service 取得完了")
                 break
-            except Exception:
+            except Exception as e:
+                gmm_app.logger.warning(f"認証エラー:\n{e}")
                 time.sleep(10)
                 gmm_app.app.logger.info(f"認証待機中... ({i+1}/60)")
         if service is None:

@@ -6,6 +6,8 @@ from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from urllib.parse import quote
 import os
+import httplib2
+import google_auth_httplib2
 
 from gmm_server import GMMServer
 
@@ -77,7 +79,12 @@ class OAuthRequest(GMMServer):
     def get_gmail_service(self):
         """Gmail APIのサービスを取得"""
         if self.google_creds and self.google_creds.valid:
-            return build("gmail", "v1", credentials=self.google_creds)
+            timeout = int(os.getenv("GMM_HTTP_TIMEOUT", 60))
+            http = google_auth_httplib2.AuthorizedHttp(
+                self.google_creds,
+                http=httplib2.Http(timeout=timeout)
+            )
+            return build("gmail", "v1", http=http, cache_discovery=False)
         else:
             raise Exception("認証されていません。")
 

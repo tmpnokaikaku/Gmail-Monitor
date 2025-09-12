@@ -1,4 +1,7 @@
+from googleapiclient.errors import HttpError
 import base64
+import time
+import socket
 
 from gmm_server import GMMServer
 
@@ -32,10 +35,33 @@ class FetchGmail(GMMServer):
 
 
     def fetch_mail_content(self, service):
-        results = service.users().messages().list(userId="me", maxResults=self.number_to_fetch).execute()
-        messages = results.get("messages", [])
+        self.app.logger.info(f"最大{self.number_to_fetch}件のメールを取得します")
 
-        #print(f"受信メール件数: {len(messages)}")
+        last_err = None
+        for attempt in range(1, 4):
+            try:
+                results = service.users().messages().list(userId="me", maxResults=self.number_to_fetch).execute()
+                break
+            except (socket.timeout, TimeoutError) as e:
+                self.app.logger.warning(f"メール取得中に接続がタイムアウトしました (try {attempt}/3):\n{e}")
+                last_err = e
+            except HttpError as e:
+                # エラーコード 5xx は再試行, 4xx は即失敗
+                if 500 <= e.resp.status < 600:
+                    self.app.logger.warning(f"メールリスト 5xx エラー: (try {attempt}/3)\n{e}")
+                    last_err = e
+                else:
+                    self.app.logger.exception(f"メールリスト HTTPエラー:\n{e}")
+                    raise
+            except Exception as e:
+                self.app.logger.exception(f"メールリスト エラー:\n{e}")
+                raise
+            time.sleep(2 ** attempt)    # 2s, 4s, 8s
+        else:
+            # 3回ともに失敗時
+            raise TimeoutError(f"メールリスト失敗, 最新エラー:\n{last_err}")
+
+        messages = results.get("messages", [])
         results:list[dict] = []
         for message in messages:
             msg = service.users().messages().get(userId="me", id=message["id"]).execute()
