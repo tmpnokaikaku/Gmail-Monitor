@@ -1,9 +1,9 @@
 from dataclasses import dataclass
-from typing import Optional
 
 from line_webhook import LINEWebhook
-from oauth_request import OAuthRequest
-from fetch_gmail import FetchGmail
+#from oauth_request import OAuthRequest
+#from fetch_gmail import FetchGmail
+from google_service import GoogleService    # OauthRequest と FetchGmail を統合
 from extract_gmail_content import ExtractGmailContent
 
 import time
@@ -34,7 +34,7 @@ class AppConfig:
     filter_path: str = "filters.json"
 
 
-class GmailMonitor(LINEWebhook, OAuthRequest, FetchGmail, ExtractGmailContent):
+class GmailMonitor(LINEWebhook, GoogleService, ExtractGmailContent):
     def __init__(self, cfg: AppConfig) -> None:
         self.cfg = cfg
         # 親クラスの初期化
@@ -53,6 +53,7 @@ class GmailMonitor(LINEWebhook, OAuthRequest, FetchGmail, ExtractGmailContent):
             cfg.line_uid,
         )
 
+        """
         OAuthRequest.__init__(
             self,
             cfg.creds_path,
@@ -66,17 +67,25 @@ class GmailMonitor(LINEWebhook, OAuthRequest, FetchGmail, ExtractGmailContent):
             self,
             cfg.number_to_fetch
         )
+        """
+
+        GoogleService.__init__(
+            self,
+            cfg.creds_path,
+            cfg.token_path,
+            cfg.flask_port,
+            self.push_to_line,
+            cfg.env_key_for_domain,
+            cfg.number_to_fetch
+        )
 
         ExtractGmailContent.__init__(
             self,
             cfg.filter_path
         )
 
-    # main から使うユーティリティもこのクラスに温存
-
 
 def main() -> None:
-    # 構成の意図が読みやすくなる
     cfg = AppConfig(
         flask_port=8080,
         number_to_fetch=10,
@@ -109,7 +118,24 @@ def main() -> None:
             gmm_app.app.logger.error("OAuthが完了しませんでした")
             raise RuntimeError("OAuthが完了しませんでした")
 
-    mail_contents = gmm_app.fetch_mail_content(service)
+    # Gmail取得
+    try:
+        mail_contents = gmm_app.fetch_mail_content()
+    except TimeoutError as e:
+        gmm_app.app.logger.error(f"Gmail取得でタイムアウト: {e}")
+        try:
+            #gmm_app.push_to_line("[GmailMonitor] Gmail取得タイムアウト。後で再試行します。")
+            pass
+        except Exception:
+            pass
+        return
+    except Exception as e:
+        gmm_app.app.logger.exception(f"Gmail取得で異常終了: {e}")
+        try:
+            gmm_app.push_to_line(f"[GmailMonitor] Gmail取得失敗: {e}")
+        except Exception:
+            pass
+        return
 
     for content in mail_contents:
         # 返り値に extractor(抽出器) と sender_label(送信者ラベル) を含める
