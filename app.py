@@ -1,8 +1,6 @@
 from dataclasses import dataclass
 
 from line_webhook import LINEWebhook
-#from oauth_request import OAuthRequest
-#from fetch_gmail import FetchGmail
 from google_service import GoogleService    # OauthRequest と FetchGmail を統合
 from extract_gmail_content import ExtractGmailContent
 
@@ -53,22 +51,6 @@ class GmailMonitor(LINEWebhook, GoogleService, ExtractGmailContent):
             cfg.line_uid,
         )
 
-        """
-        OAuthRequest.__init__(
-            self,
-            cfg.creds_path,
-            cfg.token_path,
-            cfg.flask_port,
-            self.push_to_line,
-            cfg.env_key_for_domain,
-        )
-
-        FetchGmail.__init__(
-            self,
-            cfg.number_to_fetch
-        )
-        """
-
         GoogleService.__init__(
             self,
             cfg.creds_path,
@@ -98,7 +80,7 @@ def main() -> None:
     gmm_app.app.logger.info(f"Public URL: {gmm_app.public_url}")
 
     try:
-        service = gmm_app.get_gmail_service()
+        service = gmm_app.get_gmail_session()
     except Exception:
         # 認証リンクをLINEに送る（tokenが無い/失効時）
         foo = gmm_app.authorize(gmm_app.line_uid)
@@ -107,7 +89,7 @@ def main() -> None:
         service = None
         for i in range(60):
             try:
-                service = gmm_app.get_gmail_service()
+                service = gmm_app.get_gmail_session()
                 gmm_app.app.logger.info("Gmail service 取得完了")
                 break
             except Exception as e:

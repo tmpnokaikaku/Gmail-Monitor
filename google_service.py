@@ -95,18 +95,9 @@ class GoogleService(GMMServer):
         return False
 
 
-    def get_gmail_service(self) -> AuthorizedSession:
+    def get_gmail_session(self) -> AuthorizedSession:
         """Gmail API 呼び出し用の AuthorizedSession (requests) を取得"""
         if self.google_creds and self.google_creds.valid:
-            """
-            timeout = int(os.getenv("GMM_HTTP_TIMEOUT", 60))
-            http = google_auth_httplib2.AuthorizedHttp(
-                self.google_creds,
-                http=httplib2.Http(timeout=timeout)
-            )
-            self.gmail_service = build("gmail", "v1", http=http, cache_discovery=False)
-            return self.gmail_service
-            """
             # requests 統一
             self.gmail_session = AuthorizedSession(self.google_creds)
             self.app.logger.info("Gmail AuthorizedSession を生成しました")
@@ -207,7 +198,7 @@ class GoogleService(GMMServer):
 
         # セッション準備
         if not self.gmail_session:
-            self.get_gmail_service()
+            self.get_gmail_session()
         sess = self.gmail_session
         assert sess is not None
 
