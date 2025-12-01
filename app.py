@@ -119,20 +119,28 @@ def main() -> None:
             pass
         return
 
+    # LINE転送
+    fullcontent = ""
+    tmp = fullcontent
     for content in mail_contents:
         # 返り値に extractor(抽出器) と sender_label(送信者ラベル) を含める
         valid, extractor, sender_label = gmm_app.filter_by_items(content)
         if not valid:
             continue
-
         info = gmm_app.extract(extractor, content["full_body"])  # 例: extractor="manaba"
         if not info:
             continue
-
         # 送信者ラベルを先頭に付与（必要に応じて整形）
         text_lines = [f"[{sender_label}]" ] + [f"{k}: {v}" for k, v in info.items()]
-        gmm_app.push_to_line("\n".join(text_lines))
-
+        if fullcontent:
+            fullcontent += "\n"
+        fullcontent += text_lines
+        fullcontent += "\n" 
+        fullcontent += "-"*24
+    if fullcontent != tmp:
+        gmm_app.push_to_line(fullcontent)
+    else:
+        gmm_app.logger.info("重要なメールを受信しなかったので転送しませんでした")
     gmm_app.stop_server()
 
 

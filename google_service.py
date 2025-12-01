@@ -211,17 +211,10 @@ class GoogleService(GMMServer):
                 "includeSpamTrash": "false",
                 # 未読のみ
                 "labelIds": ["INBOX", "UNREAD"],
+                "format": "full",
                 "fields": "messages(id),nextPageToken",
             }
-            #r = sess.get(url, params=params, timeout=self.http_timeout)
-            r = sess.get(
-                msg_url,
-                params={
-                    "format": "full",
-                    "fields": "id,payload/headers(name,value),payload/body/data,payload/parts(mimeType,body/data)"
-                },
-                timeout=self.http_timeout
-            )
+            r = sess.get(url, params=params, timeout=self.http_timeout)
             r.raise_for_status()
             data = r.json()
             messages = data.get("messages", [])
