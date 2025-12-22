@@ -14,11 +14,6 @@ class ExtractGmailContent:
             "subjects": ["manaba", "【manaba】", "manabaからの通知"],
             "senders": ["@manaba", "no-reply@manaba.jp"],
             "extractor": "manaba"
-            },
-            "CELS": {
-            "subjects": ["CELS"],
-            "senders": ["cels@"],
-            "extractor": "cels"
             }
         }
     }

@@ -9,6 +9,11 @@
             "subjects": ["CELS"],
             "senders": ["cels@"],
             "extractor": "cels"
+        },
+        "sdsOffice": {
+            "subjects": ["東本館の利用"],
+            "senders": ["sds-km@ad.hit-u.ac.jp"],
+            "extractor": "sdsoffice"
         }
     }
 }

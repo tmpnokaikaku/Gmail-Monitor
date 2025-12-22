@@ -134,9 +134,10 @@ def main() -> None:
         text_lines = [f"[{sender_label}]" ] + [f"{k}: {v}" for k, v in info.items()]
         if fullcontent:
             fullcontent += "\n"
-        fullcontent += text_lines
+        for line in text_lines:
+            fullcontent += line
         fullcontent += "\n" 
-        fullcontent += "-"*24
+        fullcontent += "-"*20
     if fullcontent != tmp:
         gmm_app.push_to_line(fullcontent)
     else:
