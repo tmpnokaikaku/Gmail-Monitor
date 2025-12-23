@@ -3,8 +3,10 @@ import re
 import json
 from typing import Dict, List, Tuple, Optional
 
+from ai_extractor import AIExtractor
 
-class ExtractGmailContent:
+
+class ExtractGmailContent(AIExtractor):
     """メール本文の抽出とフィルタ定義の読み込み。
 
     filters.json（新仕様）
@@ -19,7 +21,21 @@ class ExtractGmailContent:
     }
     """
 
-    def __init__(self, filter_path: str = "filters.json") -> None:
+    def __init__(
+        self,
+        filter_path: str = "filters.json",
+        ai_api_key_env: str = "GEMINI_API_KEY",
+        ai_model: str = "gemini-1.5-flash",
+        ai_timeout: int = 30,
+        ai_endpoint_base: str = "https://generativelanguage.googleapis.com/v1beta",
+    ) -> None:
+        AIExtractor.__init__(
+            self,
+            api_key_env=ai_api_key_env,
+            model=ai_model,
+            timeout=ai_timeout,
+            endpoint_base=ai_endpoint_base,
+        )
         self.fields: Dict[str, str] = {}
         with open(filter_path, "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -61,9 +77,9 @@ class ExtractGmailContent:
 
     def extract(self, keyword: str, body_text: str) -> Optional[Dict[str, str]]:
         if keyword == "manaba":
-            return self.from_manaba(body_text)
+            return self._from_manaba(body_text)
         elif keyword == "cels":
-            return self.from_cels(body_text)
+            return self._from_cels(body_text)
         else:
             return None
 
@@ -72,7 +88,7 @@ class ExtractGmailContent:
             self.fields = {}
 
 
-    def from_manaba(self, body_text: str) -> Dict[str, str]:
+    def _from_manaba(self, body_text: str) -> Dict[str, str]:
         self._clear_field()
 
         # 掲示された内容
@@ -112,41 +128,18 @@ class ExtractGmailContent:
 
         return self.fields
 
-    def from_cels(self, body_text: str) -> Dict[str, str]:
-        def extract_japanese(text: str) -> str:
-            """スラッシュがあれば左側（日本語）、無ければそのまま"""
-            return text.split('/')[0].strip()
-
+    def _from_cels(self, body_text: str) -> Dict[str, str]:
         self._clear_field()
-
-        # ジャンル名称
-        match_genre = re.search(r'ジャンル名称：(.+)', body_text)
-        if match_genre:
-            self.fields['ジャンル名称'] = extract_japanese(match_genre.group(1).strip())
-
-        # 表題
-        match_title = re.search(r'表題：(.+)', body_text)
-        if match_title:
-            self.fields['表題'] = extract_japanese(match_title.group(1).strip())
-
-        # 内容（基本的に日本語のみだが念のため）
-        match_content = re.search(r'内容：(.+?)(?:掲示者所属名称|URL|添付有無|詳細はCELS|$)', body_text, re.DOTALL)
-        if match_content:
-            self.fields['内容'] = extract_japanese(match_content.group(1).strip())
-
-        # 掲示者所属名称
-        match_affil = re.search(r'掲示者所属名称：(.+)', body_text)
-        if match_affil:
-            self.fields['掲示者所属名称'] = extract_japanese(match_affil.group(1).strip())
-
-        # 掲示者
-        match_author = re.search(r'掲示者：(.+)', body_text)
-        if match_author:
-            self.fields['掲示者'] = extract_japanese(match_author.group(1).strip())
-
-        # URL
-        match_url = re.search(r'(https?://[^\s]+)', body_text)
-        if match_url:
-            self.fields['URL'] = match_url.group(1)
-
+        schema = {
+            "title": "メールの主題を1文で。見出しや表題があればそれを使う。",
+            "deadline": "期限や期間があれば日付のみ。無ければ空。",
+            "action": "受信者が取るべき行動を簡潔に。",
+            "urls": "重要なURLを改行区切りで列挙。無ければ空。",
+            "summary": "本文の要点を日本語で1から3文で要約。挨拶や定型文は除外。",
+        }
+        ai_result = self.extract_json(body_text, schema)
+        if ai_result and ai_result.get("summary"):
+            self.fields["summary"] = ai_result["summary"]
+        else:
+            self.fields["summary"] = body_text[:100]
         return self.fields

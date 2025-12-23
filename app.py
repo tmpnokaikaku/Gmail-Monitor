@@ -30,6 +30,10 @@ class AppConfig:
     # Fetch / Extract
     number_to_fetch: int = 5
     filter_path: str = "filters.json"
+    ai_api_key_env: str = "GEMINI_API_KEY"
+    ai_model: str = "gemini-1.5-flash"
+    ai_timeout: int = 30
+    ai_endpoint_base: str = "https://generativelanguage.googleapis.com/v1beta"
 
 
 class GmailMonitor(LINEWebhook, GoogleService, ExtractGmailContent):
@@ -63,7 +67,11 @@ class GmailMonitor(LINEWebhook, GoogleService, ExtractGmailContent):
 
         ExtractGmailContent.__init__(
             self,
-            cfg.filter_path
+            cfg.filter_path,
+            cfg.ai_api_key_env,
+            cfg.ai_model,
+            cfg.ai_timeout,
+            cfg.ai_endpoint_base,
         )
 
 
