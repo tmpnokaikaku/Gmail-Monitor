@@ -1,9 +1,10 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from line_webhook import LINEWebhook
 from google_service import GoogleService    # OauthRequest と FetchGmail を統合
 from extract_gmail_content import ExtractGmailContent
 
+from requests.exceptions import Timeout
 import time
 
 
@@ -31,8 +32,15 @@ class AppConfig:
     number_to_fetch: int = 5
     filter_path: str = "filters.json"
     ai_api_key_env: str = "GEMINI_API_KEY"
-    ai_model: str = "gemini-1.5-flash"
-    ai_timeout: int = 30
+
+    # AI Extract
+    # 優先順位付きモデル候補 (環境変数 GEMINI_MODELS があればそちらを優先)
+    ai_models: list[str] = field(default_factory=lambda: [
+        "models/gemini-2.5-flash-lite",
+        "models/gemini-2.0-flash-lite",
+        "models/gemma-2-27b-it",
+    ])
+    ai_timeout: int = 60
     ai_endpoint_base: str = "https://generativelanguage.googleapis.com/v1beta"
 
 
@@ -69,7 +77,7 @@ class GmailMonitor(LINEWebhook, GoogleService, ExtractGmailContent):
             self,
             cfg.filter_path,
             cfg.ai_api_key_env,
-            cfg.ai_model,
+            cfg.ai_models,        # 変更
             cfg.ai_timeout,
             cfg.ai_endpoint_base,
         )
@@ -111,7 +119,7 @@ def main() -> None:
     # Gmail取得
     try:
         mail_contents = gmm_app.fetch_mail_content()
-    except TimeoutError as e:
+    except (TimeoutError, Timeout) as e:
         gmm_app.app.logger.error(f"Gmail取得でタイムアウト: {e}")
         try:
             #gmm_app.push_to_line("[GmailMonitor] Gmail取得タイムアウト。後で再試行します。")
@@ -128,29 +136,29 @@ def main() -> None:
         return
 
     # LINE転送
-    fullcontent = ""
-    tmp = fullcontent
+    blocks: list[str] = []
     for content in mail_contents:
-        # 返り値に extractor(抽出器) と sender_label(送信者ラベル) を含める
         valid, extractor, sender_label = gmm_app.filter_by_items(content)
         if not valid:
             continue
-        info = gmm_app.extract(extractor, content["full_body"])  # 例: extractor="manaba"
+        info = gmm_app.extract(
+            extractor,
+            content["full_body"],
+            subject=content.get("subject", "")
+        )
         if not info:
             continue
-        # 送信者ラベルを先頭に付与（必要に応じて整形）
-        text_lines = [f"[{sender_label}]" ] + [f"{k}: {v}" for k, v in info.items()]
-        if fullcontent:
-            fullcontent += "\n"
-        for line in text_lines:
-            fullcontent += line
-        fullcontent += "\n" 
-        fullcontent += "-"*20
-    if fullcontent != tmp:
+
+        # 整形はExtract側に委譲
+        blocks.append(gmm_app.format_for_line(extractor, sender_label, info))
+
+    if blocks:
+        divider = "\n\n" + "━━━━━━━━━━━━━━━━━━━━" + "\n\n"
+        fullcontent = divider.join(blocks)
         gmm_app.push_to_line(fullcontent)
     else:
         gmm_app.logger.info("重要なメールを受信しなかったので転送しませんでした")
-    gmm_app.stop_server()
+        gmm_app.stop_server()
 
 
 if __name__ == "__main__":

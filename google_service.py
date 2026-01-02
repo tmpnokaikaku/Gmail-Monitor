@@ -196,6 +196,47 @@ class GoogleService(GMMServer):
                     return base64.urlsafe_b64decode(body_data).decode("utf-8")
             return "(本文なし)"
 
+        def _is_empty_json(r:Response):
+            # 空body対策
+            text = (r.text or "").strip()
+            ct = (r.headers.get("content-type") or "")
+            if not text:
+                self.app.logger.warning(
+                    f"messages.list returned empty body: status={r.status_code}, "
+                    f"content-type={ct}, len={len(r.content or b'')}"
+                )
+                return True
+            else:
+                return False
+
+        def _is_broken_json(r:Response, log_as_err:bool =True):
+            """
+            壊れたjsonか非json形式ならNone, そうでないならResponse.jsonを返す
+            
+            :param r: AuthorizedSession.get
+            :type r: Response
+            :param log_as_err: エラーとしてログ出力するならTrue, Falseならwarningでログ出力
+            :type log_as_err: bool
+            """
+            text = (r.text or "").strip()
+            ct = (r.headers.get("content-type") or "")
+            try:
+                data = r.json()
+                return data
+            except Exception as e:
+                if log_as_err:
+                    self.app.logger.error(
+                        f"JSON parse failed: status={r.status_code}, content-type={ct}, "
+                        f"body_head={text[:300]!r}"
+                    )
+                    return None
+                else:
+                    self.app.logger.warning(
+                        f"JSON parse failed: status={r.status_code}, content-type={ct}, "
+                        f"body_head={text[:200]!r}"
+                    )
+                    return None
+
         # セッション準備
         if not self.gmail_session:
             self.get_gmail_session()
@@ -214,11 +255,20 @@ class GoogleService(GMMServer):
                 "format": "full",
                 "fields": "messages(id),nextPageToken",
             }
+            
             r = sess.get(url, params=params, timeout=self.http_timeout)
             r.raise_for_status()
-            data = r.json()
-            messages = data.get("messages", [])
+
+            if _is_empty_json(r):   # 追加：空body対策
+                return []   # 未読0件扱い
+
+            data = _is_broken_json(r)   # 追加：非JSON/壊れたJSON対策
+            if not data:
+                return []  # 設計意図に合わせて未読0件扱い(LINE通知しない)
+
+            messages = data.get("messages", []) or []
             self.app.logger.info(f"{len(messages)}件のメールを受信しました")
+
         except Timeout as e:
             self.app.logger.warning(f"メール取得中に接続がタイムアウト: {e}")
             raise
@@ -226,13 +276,22 @@ class GoogleService(GMMServer):
             self.app.logger.exception(f"メールリスト HTTPエラー: {e}")
             raise
 
+        # 取得したメールから必要情報を抜き出して返す
         results:list[dict] = []
         for m in messages:
             try:
                 msg_url = f"{self.gmail_base}/gmail/v1/users/me/messages/{m['id']}"
+
                 r2 = sess.get(msg_url, params={"format": "full"}, timeout=self.http_timeout)
                 r2.raise_for_status()
-                msg = r2.json()
+
+                if _is_empty_json(r2):   # 追加：空body対策
+                    continue   # このメールは飛ばす
+
+                msg = _is_broken_json(r2)   # 追加：非JSON/壊れたJSON対策
+                if not msg:
+                    continue
+
                 headers = msg.get("payload", {}).get("headers", [])
                 subject = next((h["value"] for h in headers if h.get("name") == "Subject"), "(件名なし)")
                 sender = next((h["value"] for h in headers if h.get("name") == "From"), "(送信者不明)")
