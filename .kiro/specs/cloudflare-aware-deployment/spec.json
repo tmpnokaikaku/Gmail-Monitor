@@ -1,0 +1,22 @@
+{
+  "feature_name": "cloudflare-aware-deployment",
+  "created_at": "2026-05-18T13:38:28.9086831+09:00",
+  "updated_at": "2026-05-18T14:07:52.8464772+09:00",
+  "language": "ja",
+  "phase": "tasks-generated",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true
+    },
+    "design": {
+      "generated": true,
+      "approved": true
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true
+    }
+  },
+  "ready_for_implementation": true
+}

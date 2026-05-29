@@ -1,0 +1,63 @@
+services:
+  gmail-monitor:
+    build:
+      context: .
+    image: gmail-monitor:local
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      GMM_FLASK_HOST: 0.0.0.0
+      GMM_FLASK_PORT: 8080
+      GMM_CREDS_PATH: /runtime/credentials.json
+      GMM_TOKEN_PATH: /runtime/token.json
+      GMM_FILTER_PATH: /runtime/filters.json
+      GMM_LOG_FILE: /runtime/log/gmm_app.log
+    volumes:
+      - type: bind
+        source: ${GMM_RUNTIME_DIR:-./runtime}/credentials.json
+        target: /runtime/credentials.json
+        read_only: true
+      - type: bind
+        source: ${GMM_RUNTIME_DIR:-./runtime}/token.json
+        target: /runtime/token.json
+      - type: bind
+        source: ${GMM_RUNTIME_DIR:-./runtime}/filters.json
+        target: /runtime/filters.json
+        read_only: true
+      - type: bind
+        source: ${GMM_RUNTIME_DIR:-./runtime}/log
+        target: /runtime/log
+    ports:
+      - "127.0.0.1:8080:8080"
+
+  check:
+    image: gmail-monitor:local
+    build:
+      context: .
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      GMM_FLASK_HOST: 0.0.0.0
+      GMM_FLASK_PORT: 8080
+      GMM_CREDS_PATH: /runtime/credentials.json
+      GMM_TOKEN_PATH: /runtime/token.json
+      GMM_FILTER_PATH: /runtime/filters.json
+      GMM_LOG_FILE: /runtime/log/gmm_app.log
+    volumes:
+      - type: bind
+        source: ${GMM_RUNTIME_DIR:-./runtime}/credentials.json
+        target: /runtime/credentials.json
+        read_only: true
+      - type: bind
+        source: ${GMM_RUNTIME_DIR:-./runtime}/token.json
+        target: /runtime/token.json
+      - type: bind
+        source: ${GMM_RUNTIME_DIR:-./runtime}/filters.json
+        target: /runtime/filters.json
+        read_only: true
+      - type: bind
+        source: ${GMM_RUNTIME_DIR:-./runtime}/log
+        target: /runtime/log
+    command: ["python", "scripts/container_check.py"]

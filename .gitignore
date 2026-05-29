@@ -38,6 +38,7 @@ pip-delete-this-directory.txt
 
 # Unit test / coverage reports
 htmlcov/
+test_tmp_runtime/
 .tox/
 .nox/
 .coverage
@@ -196,7 +197,12 @@ cython_debug/
 # Google authorization files
 token.json
 credentials.json
+runtime/
 
 # lsyncd
 .syncignore
+
+# user
 memo.txt
+base64_encoder.py
+base64_decoder.py

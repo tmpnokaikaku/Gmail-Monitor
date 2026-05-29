@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from flask import request, redirect, abort, Response
 from google.auth.transport.requests import Request as GRequest, AuthorizedSession
 from requests.exceptions import Timeout, RequestException
@@ -68,6 +70,7 @@ class GoogleService(GMMServer):
             if self.google_creds and self.google_creds.valid:
                 self.app.logger.info("token.json (valid) で認証します")
                 return True
+
             if self.google_creds and self.google_creds.expired and self.google_creds.refresh_token:
                 try:
                     #self.google_creds.refresh(Request())
@@ -75,11 +78,18 @@ class GoogleService(GMMServer):
                     s = self._session_with_default_timeout(self.http_timeout)
                     self.google_creds.refresh(GRequest(session=s))
                     self.app.logger.info("Google credentials をリフレッシュしました")
+
+                    # refresh したトークンを保存
+                    fd = os.open(self.token_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+                    with os.fdopen(fd, "w") as f:
+                        f.write(self.google_creds.to_json())
+                    self.app.logger.info("token.json を更新しました")
                     return True
+
                 except Exception as e:
-                    print(f"Credentialのリフレッシュ失敗: {e}")
+                    self.app.logger.error(f"Credentialのリフレッシュ失敗: {e}")
         else:
-            print("token.jsonが存在しません")
+            self.app.logger.warning("token.jsonが存在しません")
 
         # 認証失敗した場合、認証リンクをLINEに送信
         if self.push_func and uid:
@@ -97,6 +107,9 @@ class GoogleService(GMMServer):
 
     def get_gmail_session(self) -> AuthorizedSession:
         """Gmail API 呼び出し用の AuthorizedSession (requests) を取得"""
+        if (self.google_creds is None) and os.path.exists(self.token_path):
+            self.google_creds = Credentials.from_authorized_user_file(self.token_path, self.__class__.scopes)
+
         if self.google_creds and self.google_creds.valid:
             # requests 統一
             self.gmail_session = AuthorizedSession(self.google_creds)

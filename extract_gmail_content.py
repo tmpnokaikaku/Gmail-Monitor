@@ -23,7 +23,7 @@ class ExtractGmailContent(AIExtractor):
             endpoint_base=ai_endpoint_base,
         )
         self.fields: Dict[str, str] = {}
-        with open(filter_path, "r", encoding="utf-8") as f:
+        with open(filter_path, "r", encoding="utf-8-sig") as f:
             data = json.load(f)
         if "groups" not in data or not isinstance(data["groups"], dict):
             raise ValueError("filters.json がgroups配下ではありません")

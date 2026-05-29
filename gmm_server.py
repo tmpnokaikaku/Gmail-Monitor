@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from flask import Flask
 from werkzeug.middleware.proxy_fix import ProxyFix
 from logging.handlers import RotatingFileHandler
@@ -8,7 +10,12 @@ import logging
 
 
 class GMMServer():
-    def __init__(self, flask_port: int = 8080, env_key_for_domain: str = "SERVER_DOMAIN"):
+    def __init__(
+            self,
+            flask_port: int = 8080,
+            env_key_for_domain: str = "SERVER_DOMAIN",
+            flask_host: str | None = None
+        ):
         # Flask app
         self.app = Flask(__name__)
         """
@@ -20,13 +27,20 @@ class GMMServer():
         """
         self.app.wsgi_app = ProxyFix(self.app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_prefix=1)
         self.port = flask_port
+        self.host = flask_host or os.getenv("GMM_FLASK_HOST", "127.0.0.1")
         self.webhook_domain = os.getenv(env_key_for_domain)
         self.public_url = None
         self.server_running = False
 
         # 共通ロガー初期化
         self._init_logger()
+        self._ensure_health_routes()
 
+    def _ensure_health_routes(self):
+        if not hasattr(self, "_health_added"):
+            self.app.add_url_rule("/health", "health", lambda: ("ok", 200), methods=["GET", "HEAD"])
+            self.app.add_url_rule("/", "root", lambda: ("ok", 200), methods=["GET", "HEAD"])
+            self._health_added = True
 
     def _init_logger(self):
         self.logger = logging.getLogger("gmm")
@@ -88,14 +102,11 @@ class GMMServer():
     # flaskサーバーを外部に公開
     def run_and_expose_server(self):
         # ヘルスチェック
-        if not hasattr(self, "_health_added"):
-            self.app.add_url_rule("/health", "health", lambda: ("ok", 200), methods=["GET", "HEAD"])
-            self.app.add_url_rule("/", "root", lambda: ("ok", 200), methods=["GET", "HEAD"])
-            self._health_added = True
+        self._ensure_health_routes()
 
         def run_flask():
-            self.logger.info(f"Starting Flask on 127.0.0.1:{self.port}")
-            self.app.run(host="127.0.0.1", port=self.port, threaded=True)
+            self.logger.info(f"Starting Flask on {self.host}:{self.port}")
+            self.app.run(host=self.host, port=self.port, threaded=True)
 
         self.flask_thread = threading.Thread(target=run_flask, daemon=True)
         self.flask_thread.start()

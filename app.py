@@ -5,6 +5,7 @@ from google_service import GoogleService    # OauthRequest と FetchGmail を統
 from extract_gmail_content import ExtractGmailContent
 
 from requests.exceptions import Timeout
+import os
 import time
 
 
@@ -83,12 +84,28 @@ class GmailMonitor(LINEWebhook, GoogleService, ExtractGmailContent):
         )
 
 
-def main() -> None:
-    cfg = AppConfig(
-        flask_port=8080,
-        number_to_fetch=10,
-        filter_path="filters.json",
+def _int_from_env(name: str, default: int) -> int:
+    raw = os.getenv(name)
+    if raw is None or raw == "":
+        return default
+    try:
+        return int(raw)
+    except ValueError as exc:
+        raise ValueError(f"{name} must be an integer: {raw!r}") from exc
+
+
+def build_app_config_from_env() -> AppConfig:
+    return AppConfig(
+        flask_port=_int_from_env("GMM_FLASK_PORT", 8080),
+        creds_path=os.getenv("GMM_CREDS_PATH", "credentials.json"),
+        token_path=os.getenv("GMM_TOKEN_PATH", "token.json"),
+        number_to_fetch=_int_from_env("GMM_NUMBER_TO_FETCH", 10),
+        filter_path=os.getenv("GMM_FILTER_PATH", "filters.json"),
     )
+
+
+def main() -> None:
+    cfg = build_app_config_from_env()
 
     gmm_app = GmailMonitor(cfg)
 
